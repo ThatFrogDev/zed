@@ -324,7 +324,7 @@ struct MacWindowState {
     renderer: renderer::Renderer,
     kind: WindowKind,
     request_frame_callback: Option<Box<dyn FnMut()>>,
-    event_callback: Option<Box<dyn FnMut(PlatformInput) -> bool>>,
+    event_callback: Option<Box<dyn FnMut(PlatformInput) -> crate::DispatchEventResult>>,
     activate_callback: Option<Box<dyn FnMut(bool)>>,
     resize_callback: Option<Box<dyn FnMut(Size<Pixels>, f32)>>,
     fullscreen_callback: Option<Box<dyn FnMut(bool)>>,
@@ -715,6 +715,11 @@ impl PlatformWindow for MacWindow {
         self.0.as_ref().lock().bounds()
     }
 
+    // todo(mac)
+    fn is_maximized(&self) -> bool {
+        unimplemented!()
+    }
+
     fn content_size(&self) -> Size<Pixels> {
         self.0.as_ref().lock().content_size()
     }
@@ -967,7 +972,7 @@ impl PlatformWindow for MacWindow {
         self.0.as_ref().lock().request_frame_callback = Some(callback);
     }
 
-    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> bool>) {
+    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> crate::DispatchEventResult>) {
         self.0.as_ref().lock().event_callback = Some(callback);
     }
 
@@ -1190,7 +1195,7 @@ extern "C" fn handle_key_event(this: &Object, native_event: id, key_equivalent: 
                     window_state.lock().previous_keydown_inserted_text = Some(text.clone());
                     if let Some(callback) = callback.as_mut() {
                         event.keystroke.ime_key = Some(text.clone());
-                        handled = callback(PlatformInput::KeyDown(event));
+                        handled = !callback(PlatformInput::KeyDown(event)).propagate;
                     }
                 }
             }
@@ -1203,7 +1208,7 @@ extern "C" fn handle_key_event(this: &Object, native_event: id, key_equivalent: 
             let is_held = event.is_held;
 
             if let Some(callback) = callback.as_mut() {
-                handled = callback(PlatformInput::KeyDown(event));
+                handled = !callback(PlatformInput::KeyDown(event)).propagate;
             }
 
             if !handled && is_held {

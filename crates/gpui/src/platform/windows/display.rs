@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use uuid::Uuid;
 use windows::{
     core::PCSTR,
@@ -24,7 +24,7 @@ impl PlatformDisplay for WindowsDisplay {
 
     // todo(windows)
     fn uuid(&self) -> Result<Uuid> {
-        Err(anyhow!("not implemented yet."))
+        Ok(Uuid::default())
     }
 
     fn bounds(&self) -> Bounds<GlobalPixels> {

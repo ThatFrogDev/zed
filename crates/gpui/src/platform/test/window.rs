@@ -135,6 +135,10 @@ impl PlatformWindow for TestWindow {
         unimplemented!()
     }
 
+    fn titlebar_top_padding(&self) -> Pixels {
+        unimplemented!()
+    }
+
     fn appearance(&self) -> WindowAppearance {
         WindowAppearance::Light
     }

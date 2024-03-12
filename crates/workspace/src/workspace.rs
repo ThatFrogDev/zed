@@ -26,7 +26,7 @@ use futures::{
     Future, FutureExt, StreamExt,
 };
 use gpui::{
-    actions, canvas, div, impl_actions, point, px, size, Action, AnyElement, AnyModel, AnyView,
+    actions, canvas, div, impl_actions, point, size, Action, AnyElement, AnyModel, AnyView,
     AnyWeakView, AppContext, AsyncAppContext, AsyncWindowContext, Bounds, Context, Div,
     DragMoveEvent, Element, ElementContext, Entity, EntityId, EventEmitter, FocusHandle,
     FocusableView, Global, GlobalPixels, InteractiveElement, IntoElement, KeyContext, Keystroke,

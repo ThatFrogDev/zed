@@ -2,7 +2,7 @@ use gpui::{
     div,
     prelude::FluentBuilder,
     px, AnyElement, Div, Element, Fill, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, RenderOnce, Rgba, StyleRefinement, Styled,
+    ParentElement, Render, RenderOnce, Rgba, StatefulInteractiveElement, StyleRefinement, Styled,
     WindowAppearance::{Dark, Light, VibrantDark, VibrantLight},
     WindowBounds, WindowContext,
 };
@@ -26,7 +26,7 @@ impl Styled for PlatformTitlebar {
 
 impl PlatformTitlebar {
     fn render_caption_buttons(cx: &mut WindowContext) -> impl Element {
-        let titlebar_height = cx.titlebar_height();
+        let btn_height = cx.titlebar_height() - cx.titlebar_top_padding();
         let close_btn_hover_color = Rgba {
             r: 232.0 / 255.0,
             g: 17.0 / 255.0,
@@ -52,19 +52,17 @@ impl PlatformTitlebar {
         fn windows_caption_btn(icon_text: &'static str, hover_color: Rgba) -> Div {
             // let mut active_color = hover_color.clone();
             // active_color.a *= 0.2;
-            div()
+            h_flex()
                 .h_full()
-                .flex()
-                .flex_row()
                 .justify_center()
                 .content_center()
                 .items_center()
                 .w_12()
                 .hover(|style| style.bg(hover_color))
+                // .active(|style| style.bg(active_color))
                 .on_mouse_down(MouseButton::Left, |_, cx| {
                     cx.prevent_default();
                 })
-                // .active(|style| style.bg(pressed_color))
                 .child(icon_text)
         }
 
@@ -74,8 +72,8 @@ impl PlatformTitlebar {
             .flex_row()
             .justify_center()
             .content_stretch()
-            .max_h(titlebar_height)
-            .min_h(titlebar_height)
+            .max_h(btn_height)
+            .min_h(btn_height)
             .font("Segoe Fluent Icons")
             .text_size(gpui::Pixels(10.0))
             .children(vec![

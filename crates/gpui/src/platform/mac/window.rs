@@ -457,10 +457,6 @@ impl MacWindowState {
         })
     }
 
-    fn titlebar_top_padding(&self) -> Pixels {
-        0.0.into()
-    }
-
     fn titlebar_height(&self) -> Pixels {
         unsafe {
             let frame = NSWindow::frame(self.native_window);
@@ -768,6 +764,10 @@ impl PlatformWindow for MacWindow {
 
     fn scale_factor(&self) -> f32 {
         self.0.as_ref().lock().scale_factor()
+    }
+
+    fn titlebar_top_padding(&self) -> Pixels {
+        0.0.into()
     }
 
     fn titlebar_height(&self) -> Pixels {

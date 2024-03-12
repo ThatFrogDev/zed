@@ -57,12 +57,9 @@ impl PlatformTitlebar {
                 .justify_center()
                 .content_center()
                 .items_center()
-                .w_12()
+                .w(px(36.)) // TODO: get size of controls from window
                 .hover(|style| style.bg(hover_color))
                 // .active(|style| style.bg(active_color))
-                .on_mouse_down(MouseButton::Left, |_, cx| {
-                    cx.prevent_default();
-                })
                 .child(icon_text)
         }
 
@@ -77,24 +74,16 @@ impl PlatformTitlebar {
             .font("Segoe Fluent Icons")
             .text_size(gpui::Pixels(10.0))
             .children(vec![
-                windows_caption_btn("\u{e921}", btn_hover_color) // minimize
-                    .on_mouse_up(MouseButton::Left, |_, cx| {
-                        cx.prevent_default();
-                        cx.stop_propagation();
-                        cx.minimize_window();
-                    }),
-                windows_caption_btn("\u{e922}", btn_hover_color) // maximize
-                    .on_mouse_up(MouseButton::Left, |_, cx| {
-                        cx.prevent_default();
-                        cx.stop_propagation();
-                        cx.zoom_window();
-                    }),
-                windows_caption_btn("\u{e8bb}", close_btn_hover_color) // close
-                    .on_mouse_up(MouseButton::Left, |_, cx| {
-                        cx.prevent_default();
-                        cx.stop_propagation();
-                        cx.remove_window();
-                    }),
+                windows_caption_btn("\u{e921}", btn_hover_color), // minimize icon
+                windows_caption_btn(
+                    if matches!(cx.window_bounds(), WindowBounds::Maximized) {
+                        "\u{e923}" // restore icon
+                    } else {
+                        "\u{e922}" // maximize icon
+                    },
+                    btn_hover_color,
+                ),
+                windows_caption_btn("\u{e8bb}", close_btn_hover_color), // close icon
             ])
     }
 

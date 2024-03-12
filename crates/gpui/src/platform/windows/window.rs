@@ -732,8 +732,20 @@ impl WindowsWindowInner {
             return LRESULT(HTTOP as _);
         }
 
-        if cursor_point.y < self.get_titlebar_rect().unwrap().bottom {
-            return LRESULT(HTCAPTION as _);
+        let titlebar_rect = self.get_titlebar_rect();
+        if let Ok(titlebar_rect) = titlebar_rect {
+            if cursor_point.y < titlebar_rect.bottom {
+                let caption_btn_width = unsafe { GetSystemMetricsForDpi(SM_CXSIZE, dpi) };
+                if cursor_point.x >= titlebar_rect.right - caption_btn_width {
+                    return LRESULT(HTCLOSE as _);
+                } else if cursor_point.x >= titlebar_rect.right - caption_btn_width * 2 {
+                    return LRESULT(HTMAXBUTTON as _);
+                } else if cursor_point.x >= titlebar_rect.right - caption_btn_width * 3 {
+                    return LRESULT(HTMINBUTTON as _);
+                }
+
+                return LRESULT(HTCAPTION as _);
+            }
         }
 
         LRESULT(HTCLIENT as _)
@@ -790,7 +802,12 @@ impl WindowsWindowInner {
             }
         }
         drop(callbacks);
-        unsafe { DefWindowProcW(self.hwnd, msg, wparam, lparam) }
+
+        match wparam.0 as u32 {
+            // Since these are handled in handle_nc_mouse_up_msg we must prevent the default window proc
+            HTMINBUTTON | HTMAXBUTTON => LRESULT(0),
+            _ => unsafe { DefWindowProcW(self.hwnd, msg, wparam, lparam) },
+        }
     }
 
     fn handle_nc_mouse_up_msg(
@@ -820,6 +837,25 @@ impl WindowsWindowInner {
             }
         }
         drop(callbacks);
+
+        if button == MouseButton::Left {
+            match wparam.0 as u32 {
+                HTMINBUTTON => unsafe {
+                    ShowWindow(self.hwnd, SW_MINIMIZE);
+                    return LRESULT(0);
+                },
+                HTMAXBUTTON => unsafe {
+                    if self.is_maximized() {
+                        ShowWindow(self.hwnd, SW_NORMAL);
+                    } else {
+                        ShowWindow(self.hwnd, SW_MAXIMIZE);
+                    }
+                    return LRESULT(0);
+                },
+                _ => {}
+            };
+        }
+
         unsafe { DefWindowProcW(self.hwnd, msg, wparam, lparam) }
     }
 }

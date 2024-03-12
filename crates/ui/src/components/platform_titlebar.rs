@@ -50,8 +50,8 @@ impl PlatformTitlebar {
         };
 
         fn windows_caption_btn(icon_text: &'static str, hover_color: Rgba) -> Div {
-            let mut active_color = hover_color.clone();
-            active_color.a *= 0.2;
+            // let mut active_color = hover_color.clone();
+            // active_color.a *= 0.2;
             div()
                 .h_full()
                 .flex()

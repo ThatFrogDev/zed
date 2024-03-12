@@ -55,11 +55,11 @@ use windows::{
 
 use crate::{
     get_window_long, platform::blade::BladeRenderer, set_window_long, AnyWindowHandle, Bounds,
-    GlobalPixels, HiLoWord, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, NavigationDirection, Pixels, PlatformAtlas,
-    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PromptLevel,
-    Scene, ScrollDelta, Size, TouchPhase, WindowAppearance, WindowBounds, WindowOptions,
-    WindowsDisplay, WindowsPlatformInner,
+    DispatchEventResult, GlobalPixels, HiLoWord, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, NavigationDirection, Pixels,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
+    PromptLevel, Scene, ScrollDelta, Size, TouchPhase, WindowAppearance, WindowBounds,
+    WindowOptions, WindowsDisplay, WindowsPlatformInner,
 };
 
 #[derive(PartialEq)]
@@ -390,7 +390,7 @@ impl WindowsWindowInner {
                 pressed_button,
                 modifiers: self.current_modifiers(),
             };
-            if callback(PlatformInput::MouseMove(event)) {
+            if callback(PlatformInput::MouseMove(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -482,7 +482,7 @@ impl WindowsWindowInner {
                     is_held: true,
                 };
 
-                if callback(PlatformInput::KeyDown(event)) {
+                if callback(PlatformInput::KeyDown(event)).default_prevented {
                     CallbackResult::Handled { by_callback: true }
                 } else if let Some(mut input_handler) = self.input_handler.take() {
                     if let Some(ime_key) = ime_key {
@@ -507,8 +507,10 @@ impl WindowsWindowInner {
         if let Some(keystroke) = keystroke {
             if let Some(callback) = callbacks.input.as_mut() {
                 let event = KeyUpEvent { keystroke };
-                let by_callback = callback(PlatformInput::KeyUp(event));
-                CallbackResult::Handled { by_callback }
+                let result = callback(PlatformInput::KeyUp(event));
+                CallbackResult::Handled {
+                    by_callback: result.default_prevented,
+                }
             } else {
                 CallbackResult::Handled { by_callback: false }
             }
@@ -533,7 +535,7 @@ impl WindowsWindowInner {
                 is_held: false,
             };
 
-            if callback(PlatformInput::KeyDown(event)) {
+            if callback(PlatformInput::KeyDown(event)).default_prevented {
                 return LRESULT(0);
             }
 
@@ -559,7 +561,7 @@ impl WindowsWindowInner {
                 modifiers: self.current_modifiers(),
                 click_count: 1,
             };
-            if callback(PlatformInput::MouseDown(event)) {
+            if callback(PlatformInput::MouseDown(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -577,7 +579,7 @@ impl WindowsWindowInner {
                 modifiers: self.current_modifiers(),
                 click_count: 1,
             };
-            if callback(PlatformInput::MouseUp(event)) {
+            if callback(PlatformInput::MouseUp(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -622,7 +624,7 @@ impl WindowsWindowInner {
                 modifiers: self.current_modifiers(),
                 touch_phase: TouchPhase::Moved,
             };
-            if callback(PlatformInput::ScrollWheel(event)) {
+            if callback(PlatformInput::ScrollWheel(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -753,7 +755,7 @@ impl WindowsWindowInner {
                 pressed_button: None,
                 modifiers: self.current_modifiers(),
             };
-            if callback(PlatformInput::MouseMove(event)) {
+            if callback(PlatformInput::MouseMove(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -783,7 +785,7 @@ impl WindowsWindowInner {
                 modifiers: self.current_modifiers(),
                 click_count: 1,
             };
-            if callback(PlatformInput::MouseDown(event)) {
+            if callback(PlatformInput::MouseDown(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -813,7 +815,7 @@ impl WindowsWindowInner {
                 modifiers: self.current_modifiers(),
                 click_count: 1,
             };
-            if callback(PlatformInput::MouseUp(event)) {
+            if callback(PlatformInput::MouseUp(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -825,7 +827,7 @@ impl WindowsWindowInner {
 #[derive(Default)]
 struct Callbacks {
     request_frame: Option<Box<dyn FnMut()>>,
-    input: Option<Box<dyn FnMut(crate::PlatformInput) -> bool>>,
+    input: Option<Box<dyn FnMut(crate::PlatformInput) -> DispatchEventResult>>,
     active_status_change: Option<Box<dyn FnMut(bool)>>,
     resize: Option<Box<dyn FnMut(Size<Pixels>, f32)>>,
     fullscreen: Option<Box<dyn FnMut(bool)>>,
@@ -1137,7 +1139,7 @@ impl PlatformWindow for WindowsWindow {
     }
 
     // todo(windows)
-    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> bool>) {
+    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>) {
         self.inner.callbacks.borrow_mut().input = Some(callback);
     }
 

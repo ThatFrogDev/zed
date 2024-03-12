@@ -22,7 +22,6 @@ pub(crate) struct WindowsTextSystem(RwLock<WindowsTextSystemState>);
 struct WindowsTextSystemState {
     swash_cache: SwashCache,
     font_system: FontSystem,
-    system_font_paths: HashSet<String>,
     fonts: Vec<Arc<CosmicTextFont>>,
     font_selections: HashMap<Font, FontId>,
     font_ids_by_family_name: HashMap<SharedString, SmallVec<[FontId; 4]>>,
@@ -34,7 +33,6 @@ impl WindowsTextSystem {
         let mut font_system = FontSystem::new();
         Self(RwLock::new(WindowsTextSystemState {
             font_system,
-            system_font_paths: HashSet::default(),
             swash_cache: SwashCache::new(),
             fonts: Vec::new(),
             font_selections: HashMap::default(),

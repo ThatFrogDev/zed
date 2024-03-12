@@ -110,7 +110,7 @@ impl TestWindow {
         drop(lock);
         let result = callback(event);
         self.0.lock().input_callback = Some(callback);
-        result
+        !result.propagate
     }
 }
 

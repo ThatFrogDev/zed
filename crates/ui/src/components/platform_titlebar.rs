@@ -1,8 +1,8 @@
 use gpui::{
     div,
     prelude::FluentBuilder,
-    px, AnyElement, Div, Element, Fill, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, Render, RenderOnce, Rgba, StatefulInteractiveElement, StyleRefinement, Styled,
+    px, AnyElement, Div, Element, Fill, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    Rgba, StyleRefinement, Styled,
     WindowAppearance::{Dark, Light, VibrantDark, VibrantLight},
     WindowBounds, WindowContext,
 };

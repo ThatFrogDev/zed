@@ -482,7 +482,7 @@ impl WindowsWindowInner {
                     is_held: true,
                 };
 
-                if callback(PlatformInput::KeyDown(event)).default_prevented {
+                if !callback(PlatformInput::KeyDown(event)).propagate {
                     CallbackResult::Handled { by_callback: true }
                 } else if let Some(mut input_handler) = self.input_handler.take() {
                     if let Some(ime_key) = ime_key {

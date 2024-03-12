@@ -841,14 +841,14 @@ impl WindowsWindowInner {
         if button == MouseButton::Left {
             match wparam.0 as u32 {
                 HTMINBUTTON => unsafe {
-                    ShowWindow(self.hwnd, SW_MINIMIZE);
+                    ShowWindowAsync(self.hwnd, SW_MINIMIZE);
                     return LRESULT(0);
                 },
                 HTMAXBUTTON => unsafe {
                     if self.is_maximized() {
-                        ShowWindow(self.hwnd, SW_NORMAL);
+                        ShowWindowAsync(self.hwnd, SW_NORMAL);
                     } else {
-                        ShowWindow(self.hwnd, SW_MAXIMIZE);
+                        ShowWindowAsync(self.hwnd, SW_MAXIMIZE);
                     }
                     return LRESULT(0);
                 },
@@ -967,7 +967,7 @@ impl WindowsWindow {
     }
 
     fn maximize(&self) {
-        unsafe { ShowWindow(self.inner.hwnd, SW_MAXIMIZE) };
+        unsafe { ShowWindowAsync(self.inner.hwnd, SW_MAXIMIZE) };
     }
 }
 
@@ -1145,7 +1145,7 @@ impl PlatformWindow for WindowsWindow {
     }
 
     fn activate(&self) {
-        unsafe { ShowWindow(self.inner.hwnd, SW_NORMAL) };
+        unsafe { ShowWindowAsync(self.inner.hwnd, SW_NORMAL) };
     }
 
     // todo(windows)

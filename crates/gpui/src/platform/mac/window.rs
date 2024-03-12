@@ -1226,7 +1226,7 @@ extern "C" fn handle_key_event(this: &Object, native_event: id, key_equivalent: 
                     window_state.lock().previous_keydown_inserted_text = Some(text.clone());
                     if let Some(callback) = callback.as_mut() {
                         event.keystroke.ime_key = Some(text.clone());
-                        handled = callback(PlatformInput::KeyDown(event));
+                        handled = !callback(PlatformInput::KeyDown(event)).propagate;
                     }
                 }
             }

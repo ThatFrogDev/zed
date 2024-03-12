@@ -325,7 +325,7 @@ struct MacWindowState {
     renderer: renderer::Renderer,
     kind: WindowKind,
     request_frame_callback: Option<Box<dyn FnMut()>>,
-    event_callback: Option<Box<dyn FnMut(PlatformInput) -> bool>>,
+    event_callback: Option<Box<dyn FnMut(PlatformInput) -> crate::DispatchEventResult>>,
     activate_callback: Option<Box<dyn FnMut(bool)>>,
     resize_callback: Option<Box<dyn FnMut(Size<Pixels>, f32)>>,
     fullscreen_callback: Option<Box<dyn FnMut(bool)>>,
@@ -1239,7 +1239,7 @@ extern "C" fn handle_key_event(this: &Object, native_event: id, key_equivalent: 
             let is_held = event.is_held;
 
             if let Some(callback) = callback.as_mut() {
-                handled = callback(PlatformInput::KeyDown(event));
+                handled = !callback(PlatformInput::KeyDown(event)).propagate;
             }
 
             if !handled && is_held {

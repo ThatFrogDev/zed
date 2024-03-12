@@ -1,8 +1,8 @@
 use gpui::{
     div,
     prelude::FluentBuilder,
-    px, AnyElement, Div, Element, Fill, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    Rgba, StyleRefinement, Styled,
+    px, AnyElement, Div, Element, Fill, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, RenderOnce, Rgba, StyleRefinement, Styled,
     WindowAppearance::{Dark, Light, VibrantDark, VibrantLight},
     WindowBounds, WindowContext,
 };
@@ -61,6 +61,9 @@ impl PlatformTitlebar {
                 .items_center()
                 .w_12()
                 .hover(|style| style.bg(hover_color))
+                .on_mouse_down(MouseButton::Left, |_, cx| {
+                    cx.prevent_default();
+                })
                 // .active(|style| style.bg(pressed_color))
                 .child(icon_text)
         }
@@ -76,9 +79,24 @@ impl PlatformTitlebar {
             .font("Segoe Fluent Icons")
             .text_size(gpui::Pixels(10.0))
             .children(vec![
-                windows_caption_btn("\u{e921}", btn_hover_color), // minimize
-                windows_caption_btn("\u{e922}", btn_hover_color), // maximize
-                windows_caption_btn("\u{e8bb}", close_btn_hover_color), // close
+                windows_caption_btn("\u{e921}", btn_hover_color) // minimize
+                    .on_mouse_up(MouseButton::Left, |_, cx| {
+                        cx.prevent_default();
+                        cx.stop_propagation();
+                        cx.minimize_window();
+                    }),
+                windows_caption_btn("\u{e922}", btn_hover_color) // maximize
+                    .on_mouse_up(MouseButton::Left, |_, cx| {
+                        cx.prevent_default();
+                        cx.stop_propagation();
+                        cx.zoom_window();
+                    }),
+                windows_caption_btn("\u{e8bb}", close_btn_hover_color) // close
+                    .on_mouse_up(MouseButton::Left, |_, cx| {
+                        cx.prevent_default();
+                        cx.stop_propagation();
+                        cx.remove_window();
+                    }),
             ])
     }
 

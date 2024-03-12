@@ -1108,8 +1108,9 @@ impl PlatformWindow for WindowsWindow {
         Some(done_rx)
     }
 
-    // todo(windows)
-    fn activate(&self) {}
+    fn activate(&self) {
+        unsafe { ShowWindow(self.inner.hwnd, SW_NORMAL) };
+    }
 
     // todo(windows)
     fn set_title(&mut self, title: &str) {
@@ -1124,11 +1125,13 @@ impl PlatformWindow for WindowsWindow {
     // todo(windows)
     fn show_character_palette(&self) {}
 
-    // todo(windows)
-    fn minimize(&self) {}
+    fn minimize(&self) {
+        unsafe { ShowWindowAsync(self.inner.hwnd, SW_MINIMIZE) };
+    }
 
-    // todo(windows)
-    fn zoom(&self) {}
+    fn zoom(&self) {
+        unsafe { ShowWindowAsync(self.inner.hwnd, SW_MAXIMIZE) };
+    }
 
     // todo(windows)
     fn toggle_full_screen(&self) {}

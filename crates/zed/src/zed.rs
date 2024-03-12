@@ -130,13 +130,11 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut AppContext) {
         let active_buffer_language =
             cx.new_view(|_| language_selector::ActiveBufferLanguage::new(workspace));
         let vim_mode_indicator = cx.new_view(|cx| vim::ModeIndicator::new(cx));
-        let feedback_button =
-            cx.new_view(|_| feedback::deploy_feedback_button::DeployFeedbackButton::new(workspace));
-        let cursor_position = cx.new_view(|_| editor::items::CursorPosition::new());
+        let cursor_position =
+            cx.new_view(|_| go_to_line::cursor_position::CursorPosition::new(workspace));
         workspace.status_bar().update(cx, |status_bar, cx| {
             status_bar.add_left_item(diagnostic_summary, cx);
             status_bar.add_left_item(activity_indicator, cx);
-            status_bar.add_right_item(feedback_button, cx);
             status_bar.add_right_item(copilot, cx);
             status_bar.add_right_item(active_buffer_language, cx);
             status_bar.add_right_item(vim_mode_indicator, cx);
@@ -868,7 +866,7 @@ mod tests {
         VisualTestContext, WindowHandle,
     };
     use language::{LanguageMatcher, LanguageRegistry};
-    use project::{project_settings::ProjectSettings, Project, ProjectPath};
+    use project::{Project, ProjectPath, WorktreeSettings};
     use serde_json::json;
     use settings::{handle_settings_file_changes, watch_config_file, SettingsStore};
     use std::path::{Path, PathBuf};
@@ -1482,7 +1480,7 @@ mod tests {
         let app_state = init_test(cx);
         cx.update(|cx| {
             cx.update_global::<SettingsStore, _>(|store, cx| {
-                store.update_user_settings::<ProjectSettings>(cx, |project_settings| {
+                store.update_user_settings::<WorktreeSettings>(cx, |project_settings| {
                     project_settings.file_scan_exclusions =
                         Some(vec!["excluded_dir".to_string(), "**/.git".to_string()]);
                 });

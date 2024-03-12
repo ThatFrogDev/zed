@@ -4,6 +4,7 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     ffi::c_void,
+    iter::once,
     num::NonZeroIsize,
     path::PathBuf,
     rc::{Rc, Weak},
@@ -12,7 +13,8 @@ use std::{
 };
 
 use blade_graphics as gpu;
-use futures::channel::oneshot::Receiver;
+use futures::channel::oneshot::{self, Receiver};
+use itertools::Itertools;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use smallvec::SmallVec;
 use util::ResultExt;
@@ -35,7 +37,9 @@ use windows::{
         },
         UI::{
             Controls::{
-                CloseThemeData, GetThemePartSize, OpenThemeData, CS_ACTIVE, TS_TRUE, WP_CAPTION,
+                CloseThemeData, GetThemePartSize, OpenThemeData, TaskDialogIndirect, CS_ACTIVE,
+                TASKDIALOGCONFIG, TASKDIALOG_BUTTON, TD_ERROR_ICON, TD_INFORMATION_ICON,
+                TD_WARNING_ICON, TS_TRUE, WP_CAPTION,
             },
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
             Input::KeyboardAndMouse::{
@@ -51,11 +55,11 @@ use windows::{
 
 use crate::{
     get_window_long, platform::blade::BladeRenderer, set_window_long, AnyWindowHandle, Bounds,
-    GlobalPixels, HiLoWord, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, NavigationDirection, Pixels, PlatformAtlas,
-    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PromptLevel,
-    Scene, ScrollDelta, Size, TouchPhase, WindowAppearance, WindowBounds, WindowOptions,
-    WindowsDisplay, WindowsPlatformInner,
+    DispatchEventResult, GlobalPixels, HiLoWord, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, NavigationDirection, Pixels,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
+    PromptLevel, Scene, ScrollDelta, Size, TouchPhase, WindowAppearance, WindowBounds,
+    WindowOptions, WindowsDisplay, WindowsPlatformInner,
 };
 
 #[derive(PartialEq)]
@@ -350,8 +354,8 @@ impl WindowsWindowInner {
         if let Some(callback) = callbacks.close.take() {
             callback()
         }
-        let mut window_handles = self.platform_inner.window_handles.borrow_mut();
-        window_handles.remove(&self.handle);
+        let mut window_handles = self.platform_inner.window_handle_values.borrow_mut();
+        window_handles.remove(&self.hwnd.0);
         if window_handles.is_empty() {
             self.platform_inner
                 .foreground_executor
@@ -386,7 +390,7 @@ impl WindowsWindowInner {
                 pressed_button,
                 modifiers: self.current_modifiers(),
             };
-            if callback(PlatformInput::MouseMove(event)) {
+            if callback(PlatformInput::MouseMove(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -478,7 +482,7 @@ impl WindowsWindowInner {
                     is_held: true,
                 };
 
-                if callback(PlatformInput::KeyDown(event)) {
+                if !callback(PlatformInput::KeyDown(event)).propagate {
                     CallbackResult::Handled { by_callback: true }
                 } else if let Some(mut input_handler) = self.input_handler.take() {
                     if let Some(ime_key) = ime_key {
@@ -503,8 +507,10 @@ impl WindowsWindowInner {
         if let Some(keystroke) = keystroke {
             if let Some(callback) = callbacks.input.as_mut() {
                 let event = KeyUpEvent { keystroke };
-                let by_callback = callback(PlatformInput::KeyUp(event));
-                CallbackResult::Handled { by_callback }
+                let result = callback(PlatformInput::KeyUp(event));
+                CallbackResult::Handled {
+                    by_callback: result.default_prevented,
+                }
             } else {
                 CallbackResult::Handled { by_callback: false }
             }
@@ -529,7 +535,7 @@ impl WindowsWindowInner {
                 is_held: false,
             };
 
-            if callback(PlatformInput::KeyDown(event)) {
+            if callback(PlatformInput::KeyDown(event)).default_prevented {
                 return LRESULT(0);
             }
 
@@ -555,7 +561,7 @@ impl WindowsWindowInner {
                 modifiers: self.current_modifiers(),
                 click_count: 1,
             };
-            if callback(PlatformInput::MouseDown(event)) {
+            if callback(PlatformInput::MouseDown(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -573,7 +579,7 @@ impl WindowsWindowInner {
                 modifiers: self.current_modifiers(),
                 click_count: 1,
             };
-            if callback(PlatformInput::MouseUp(event)) {
+            if callback(PlatformInput::MouseUp(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -618,7 +624,7 @@ impl WindowsWindowInner {
                 modifiers: self.current_modifiers(),
                 touch_phase: TouchPhase::Moved,
             };
-            if callback(PlatformInput::ScrollWheel(event)) {
+            if callback(PlatformInput::ScrollWheel(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -726,8 +732,20 @@ impl WindowsWindowInner {
             return LRESULT(HTTOP as _);
         }
 
-        if cursor_point.y < self.get_titlebar_rect().unwrap().bottom {
-            return LRESULT(HTCAPTION as _);
+        let titlebar_rect = self.get_titlebar_rect();
+        if let Ok(titlebar_rect) = titlebar_rect {
+            if cursor_point.y < titlebar_rect.bottom {
+                let caption_btn_width = unsafe { GetSystemMetricsForDpi(SM_CXSIZE, dpi) };
+                if cursor_point.x >= titlebar_rect.right - caption_btn_width {
+                    return LRESULT(HTCLOSE as _);
+                } else if cursor_point.x >= titlebar_rect.right - caption_btn_width * 2 {
+                    return LRESULT(HTMAXBUTTON as _);
+                } else if cursor_point.x >= titlebar_rect.right - caption_btn_width * 3 {
+                    return LRESULT(HTMINBUTTON as _);
+                }
+
+                return LRESULT(HTCAPTION as _);
+            }
         }
 
         LRESULT(HTCLIENT as _)
@@ -749,7 +767,7 @@ impl WindowsWindowInner {
                 pressed_button: None,
                 modifiers: self.current_modifiers(),
             };
-            if callback(PlatformInput::MouseMove(event)) {
+            if callback(PlatformInput::MouseMove(event)).default_prevented {
                 return LRESULT(0);
             }
         }
@@ -779,12 +797,17 @@ impl WindowsWindowInner {
                 modifiers: self.current_modifiers(),
                 click_count: 1,
             };
-            if callback(PlatformInput::MouseDown(event)) {
+            if callback(PlatformInput::MouseDown(event)).default_prevented {
                 return LRESULT(0);
             }
         }
         drop(callbacks);
-        unsafe { DefWindowProcW(self.hwnd, msg, wparam, lparam) }
+
+        match wparam.0 as u32 {
+            // Since these are handled in handle_nc_mouse_up_msg we must prevent the default window proc
+            HTMINBUTTON | HTMAXBUTTON => LRESULT(0),
+            _ => unsafe { DefWindowProcW(self.hwnd, msg, wparam, lparam) },
+        }
     }
 
     fn handle_nc_mouse_up_msg(
@@ -809,11 +832,30 @@ impl WindowsWindowInner {
                 modifiers: self.current_modifiers(),
                 click_count: 1,
             };
-            if callback(PlatformInput::MouseUp(event)) {
+            if callback(PlatformInput::MouseUp(event)).default_prevented {
                 return LRESULT(0);
             }
         }
         drop(callbacks);
+
+        if button == MouseButton::Left {
+            match wparam.0 as u32 {
+                HTMINBUTTON => unsafe {
+                    ShowWindowAsync(self.hwnd, SW_MINIMIZE);
+                    return LRESULT(0);
+                },
+                HTMAXBUTTON => unsafe {
+                    if self.is_maximized() {
+                        ShowWindowAsync(self.hwnd, SW_NORMAL);
+                    } else {
+                        ShowWindowAsync(self.hwnd, SW_MAXIMIZE);
+                    }
+                    return LRESULT(0);
+                },
+                _ => {}
+            };
+        }
+
         unsafe { DefWindowProcW(self.hwnd, msg, wparam, lparam) }
     }
 }
@@ -821,7 +863,7 @@ impl WindowsWindowInner {
 #[derive(Default)]
 struct Callbacks {
     request_frame: Option<Box<dyn FnMut()>>,
-    input: Option<Box<dyn FnMut(crate::PlatformInput) -> bool>>,
+    input: Option<Box<dyn FnMut(crate::PlatformInput) -> DispatchEventResult>>,
     active_status_change: Option<Box<dyn FnMut(bool)>>,
     resize: Option<Box<dyn FnMut(Size<Pixels>, f32)>>,
     fullscreen: Option<Box<dyn FnMut(bool)>>,
@@ -911,7 +953,10 @@ impl WindowsWindow {
             inner: context.inner.unwrap(),
             drag_drop_handler,
         };
-        platform_inner.window_handles.borrow_mut().insert(handle);
+        platform_inner
+            .window_handle_values
+            .borrow_mut()
+            .insert(wnd.inner.hwnd.0);
         match options.bounds {
             WindowBounds::Fullscreen => wnd.toggle_full_screen(),
             WindowBounds::Maximized => wnd.maximize(),
@@ -922,7 +967,7 @@ impl WindowsWindow {
     }
 
     fn maximize(&self) {
-        unsafe { ShowWindow(self.inner.hwnd, SW_MAXIMIZE) };
+        unsafe { ShowWindowAsync(self.inner.hwnd, SW_MAXIMIZE) };
     }
 }
 
@@ -1024,7 +1069,6 @@ impl PlatformWindow for WindowsWindow {
         self.inner.input_handler.take()
     }
 
-    // todo(windows)
     fn prompt(
         &self,
         _level: PromptLevel,
@@ -1032,11 +1076,77 @@ impl PlatformWindow for WindowsWindow {
         _detail: Option<&str>,
         _answers: &[&str],
     ) -> Option<Receiver<usize>> {
-        unimplemented!()
+        let (done_tx, done_rx) = oneshot::channel();
+        let msg = msg.to_string();
+        let detail_string = match detail {
+            Some(info) => Some(info.to_string()),
+            None => None,
+        };
+        let answers = answers.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let handle = self.inner.hwnd;
+        self.inner
+            .platform_inner
+            .foreground_executor
+            .spawn(async move {
+                unsafe {
+                    let mut config;
+                    config = std::mem::zeroed::<TASKDIALOGCONFIG>();
+                    config.cbSize = std::mem::size_of::<TASKDIALOGCONFIG>() as _;
+                    config.hwndParent = handle;
+                    let title;
+                    let main_icon;
+                    match level {
+                        crate::PromptLevel::Info => {
+                            title = windows::core::w!("Info");
+                            main_icon = TD_INFORMATION_ICON;
+                        }
+                        crate::PromptLevel::Warning => {
+                            title = windows::core::w!("Warning");
+                            main_icon = TD_WARNING_ICON;
+                        }
+                        crate::PromptLevel::Critical => {
+                            title = windows::core::w!("Critical");
+                            main_icon = TD_ERROR_ICON;
+                        }
+                    };
+                    config.pszWindowTitle = title;
+                    config.Anonymous1.pszMainIcon = main_icon;
+                    let instruction = msg.encode_utf16().chain(once(0)).collect_vec();
+                    config.pszMainInstruction = PCWSTR::from_raw(instruction.as_ptr());
+                    let hints_encoded;
+                    if let Some(ref hints) = detail_string {
+                        hints_encoded = hints.encode_utf16().chain(once(0)).collect_vec();
+                        config.pszContent = PCWSTR::from_raw(hints_encoded.as_ptr());
+                    };
+                    let mut buttons = Vec::new();
+                    let mut btn_encoded = Vec::new();
+                    for (index, btn_string) in answers.iter().enumerate() {
+                        let encoded = btn_string.encode_utf16().chain(once(0)).collect_vec();
+                        buttons.push(TASKDIALOG_BUTTON {
+                            nButtonID: index as _,
+                            pszButtonText: PCWSTR::from_raw(encoded.as_ptr()),
+                        });
+                        btn_encoded.push(encoded);
+                    }
+                    config.cButtons = buttons.len() as _;
+                    config.pButtons = buttons.as_ptr();
+
+                    config.pfCallback = None;
+                    let mut res = std::mem::zeroed();
+                    let _ = TaskDialogIndirect(&config, Some(&mut res), None, None)
+                        .inspect_err(|e| log::error!("unable to create task dialog: {}", e));
+
+                    let _ = done_tx.send(res as usize);
+                }
+            })
+            .detach();
+
+        Some(done_rx)
     }
 
-    // todo(windows)
-    fn activate(&self) {}
+    fn activate(&self) {
+        unsafe { ShowWindowAsync(self.inner.hwnd, SW_NORMAL) };
+    }
 
     // todo(windows)
     fn set_title(&mut self, title: &str) {
@@ -1051,11 +1161,13 @@ impl PlatformWindow for WindowsWindow {
     // todo(windows)
     fn show_character_palette(&self) {}
 
-    // todo(windows)
-    fn minimize(&self) {}
+    fn minimize(&self) {
+        unsafe { ShowWindowAsync(self.inner.hwnd, SW_MINIMIZE) };
+    }
 
-    // todo(windows)
-    fn zoom(&self) {}
+    fn zoom(&self) {
+        unsafe { ShowWindowAsync(self.inner.hwnd, SW_MAXIMIZE) };
+    }
 
     // todo(windows)
     fn toggle_full_screen(&self) {}
@@ -1066,7 +1178,7 @@ impl PlatformWindow for WindowsWindow {
     }
 
     // todo(windows)
-    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> bool>) {
+    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>) {
         self.inner.callbacks.borrow_mut().input = Some(callback);
     }
 

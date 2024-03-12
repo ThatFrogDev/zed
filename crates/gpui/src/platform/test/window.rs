@@ -1,7 +1,7 @@
 use crate::{
-    px, AnyWindowHandle, AtlasKey, AtlasTextureId, AtlasTile, Bounds, Pixels, PlatformAtlas,
-    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, Size,
-    TestPlatform, TileId, WindowAppearance, WindowBounds, WindowOptions,
+    px, AnyWindowHandle, AtlasKey, AtlasTextureId, AtlasTile, Bounds, DispatchEventResult, Pixels,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
+    Size, TestPlatform, TileId, WindowAppearance, WindowBounds, WindowOptions,
 };
 use collections::HashMap;
 use parking_lot::Mutex;
@@ -20,7 +20,7 @@ pub(crate) struct TestWindowState {
     platform: Weak<TestPlatform>,
     sprite_atlas: Arc<dyn PlatformAtlas>,
     pub(crate) should_close_handler: Option<Box<dyn FnMut() -> bool>>,
-    input_callback: Option<Box<dyn FnMut(PlatformInput) -> bool>>,
+    input_callback: Option<Box<dyn FnMut(PlatformInput) -> DispatchEventResult>>,
     active_status_change_callback: Option<Box<dyn FnMut(bool)>>,
     resize_callback: Option<Box<dyn FnMut(Size<Pixels>, f32)>>,
     moved_callback: Option<Box<dyn FnMut()>>,
@@ -110,7 +110,7 @@ impl TestWindow {
         drop(lock);
         let result = callback(event);
         self.0.lock().input_callback = Some(callback);
-        result
+        !result.propagate
     }
 }
 
@@ -131,8 +131,12 @@ impl PlatformWindow for TestWindow {
         2.0
     }
 
+    fn titlebar_top_padding(&self) -> Pixels {
+        0.0.into()
+    }
+
     fn titlebar_height(&self) -> Pixels {
-        unimplemented!()
+        32.0.into()
     }
 
     fn titlebar_top_padding(&self) -> Pixels {
@@ -219,7 +223,7 @@ impl PlatformWindow for TestWindow {
 
     fn on_request_frame(&self, _callback: Box<dyn FnMut()>) {}
 
-    fn on_input(&self, callback: Box<dyn FnMut(crate::PlatformInput) -> bool>) {
+    fn on_input(&self, callback: Box<dyn FnMut(crate::PlatformInput) -> DispatchEventResult>) {
         self.0.lock().input_callback = Some(callback)
     }
 

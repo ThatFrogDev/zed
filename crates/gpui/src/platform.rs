@@ -1,6 +1,6 @@
 // todo(linux): remove
 #![cfg_attr(target_os = "linux", allow(dead_code))]
-// todo(windows): remove
+// todo("windows"): remove
 #![cfg_attr(windows, allow(dead_code))]
 
 mod app_menu;
@@ -22,8 +22,8 @@ mod test;
 mod windows;
 
 use crate::{
-    Action, AnyElement, AnyWindowHandle, AsyncWindowContext, BackgroundExecutor, Bounds,
-    DevicePixels, Element, Font, FontId, FontMetrics, FontRun, ForegroundExecutor, GlobalPixels,
+    Action, AnyWindowHandle, AsyncWindowContext, BackgroundExecutor, Bounds, DevicePixels,
+    DispatchEventResult, Font, FontId, FontMetrics, FontRun, ForegroundExecutor, GlobalPixels,
     GlyphId, Keymap, LineLayout, Pixels, PlatformInput, Point, RenderGlyphParams,
     RenderImageParams, RenderSvgParams, Scene, SharedString, Size, Task, TaskLabel, WindowContext,
 };
@@ -68,7 +68,7 @@ pub(crate) fn current_platform() -> Rc<dyn Platform> {
 pub(crate) fn current_platform() -> Rc<dyn Platform> {
     Rc::new(LinuxPlatform::new())
 }
-// todo(windows)
+// todo("windows")
 #[cfg(target_os = "windows")]
 pub(crate) fn current_platform() -> Rc<dyn Platform> {
     Rc::new(WindowsPlatform::new())
@@ -193,7 +193,7 @@ pub(crate) trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn zoom(&self);
     fn toggle_full_screen(&self);
     fn on_request_frame(&self, callback: Box<dyn FnMut()>);
-    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> bool>);
+    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>);
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>);
     fn on_resize(&self, callback: Box<dyn FnMut(Size<Pixels>, f32)>);
     fn on_fullscreen(&self, callback: Box<dyn FnMut(bool)>);

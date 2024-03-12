@@ -5,10 +5,9 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Ok, Result};
 use collections::{HashMap, HashSet};
+use cosmic_text::Font as CosmicTextFont;
 use cosmic_text::{
-    fontdb::{Database, FaceInfo, Query, Source, ID},
-    Attrs, AttrsList, BufferLine, CacheKey, Family, Font as CosmicTextFont, FontSystem, Style,
-    SwashCache, Weight,
+    fontdb::Query, Attrs, AttrsList, BufferLine, CacheKey, Family, FontSystem, SwashCache,
 };
 use fontdb::Stretch;
 use itertools::Itertools;
@@ -124,9 +123,9 @@ unsafe extern "system" fn load_system_font_enum_fn(
 
 impl WindowsTextSystem {
     pub(crate) fn new() -> Self {
-        let mut this = Self(RwLock::new(WindowsTextSystemState {
-            font_system: FontSystem::new_with_locale_and_db(String::from("en-US"), Database::new()),
-            system_font_paths: HashSet::default(),
+        let mut font_system = FontSystem::new();
+        Self(RwLock::new(WindowsTextSystemState {
+            font_system,
             swash_cache: SwashCache::new(),
             fonts: Vec::new(),
             font_selections: HashMap::default(),

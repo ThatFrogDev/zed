@@ -1,25 +1,32 @@
-use smallvec::SmallVec;
-
 use gpui::{
     div,
     prelude::FluentBuilder,
-    px, AnyElement, Div, Element, Fill, Hsla, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, Rgba, Styled,
+    px, AnyElement, Div, Element, Fill, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    Rgba, StyleRefinement, Styled,
     WindowAppearance::{Dark, Light, VibrantDark, VibrantLight},
     WindowBounds, WindowContext,
 };
+use smallvec::SmallVec;
+use std::ops::Not;
 
-use crate::{h_flex, ButtonLike};
+use crate::h_flex;
 
 #[derive(IntoElement)]
 pub struct PlatformTitlebar {
     titlebar_bg: Option<Fill>,
     children: SmallVec<[AnyElement; 2]>,
+    style: StyleRefinement,
+}
+
+impl Styled for PlatformTitlebar {
+    fn style(&mut self) -> &mut StyleRefinement {
+        &mut self.style
+    }
 }
 
 impl PlatformTitlebar {
     fn render_caption_buttons(cx: &mut WindowContext) -> impl Element {
-        let titlebar_height = cx.titlebar_height();
+        let btn_height = cx.titlebar_height() - cx.titlebar_top_padding();
         let close_btn_hover_color = Rgba {
             r: 232.0 / 255.0,
             g: 17.0 / 255.0,
@@ -43,18 +50,16 @@ impl PlatformTitlebar {
         };
 
         fn windows_caption_btn(icon_text: &'static str, hover_color: Rgba) -> Div {
-            let mut active_color = hover_color.clone();
-            active_color.a *= 0.2;
-            div()
+            // let mut active_color = hover_color.clone();
+            // active_color.a *= 0.2;
+            h_flex()
                 .h_full()
-                .flex()
-                .flex_row()
                 .justify_center()
                 .content_center()
                 .items_center()
-                .w_12()
+                .w(px(36.)) // TODO: get size of controls from window
                 .hover(|style| style.bg(hover_color))
-                // .active(|style| style.bg(pressed_color))
+                // .active(|style| style.bg(active_color))
                 .child(icon_text)
         }
 
@@ -64,14 +69,21 @@ impl PlatformTitlebar {
             .flex_row()
             .justify_center()
             .content_stretch()
-            .max_h(titlebar_height)
-            .min_h(titlebar_height)
+            .max_h(btn_height)
+            .min_h(btn_height)
             .font("Segoe Fluent Icons")
             .text_size(gpui::Pixels(10.0))
             .children(vec![
-                windows_caption_btn("\u{e921}", btn_hover_color), // minimize
-                windows_caption_btn("\u{e922}", btn_hover_color), // maximize
-                windows_caption_btn("\u{e8bb}", close_btn_hover_color), // close
+                windows_caption_btn("\u{e921}", btn_hover_color), // minimize icon
+                windows_caption_btn(
+                    if matches!(cx.window_bounds(), WindowBounds::Maximized) {
+                        "\u{e923}" // restore icon
+                    } else {
+                        "\u{e922}" // maximize icon
+                    },
+                    btn_hover_color,
+                ),
+                windows_caption_btn("\u{e8bb}", close_btn_hover_color), // close icon
             ])
     }
 
@@ -91,6 +103,7 @@ pub fn platform_titlebar() -> PlatformTitlebar {
     PlatformTitlebar {
         titlebar_bg: None,
         children: SmallVec::new(),
+        style: StyleRefinement::default(),
     }
 }
 
@@ -104,21 +117,23 @@ impl RenderOnce for PlatformTitlebar {
             .min_h(cx.titlebar_height())
             .map(|mut this| {
                 this.style().background = self.titlebar_bg;
-                if matches!(cx.window_bounds(), WindowBounds::Fullscreen) {
-                    return this;
+                if cfg!(macos) {
+                    if matches!(cx.window_bounds(), WindowBounds::Fullscreen).not() {
+                        // Use pixels here instead of a rem-based size because the macOS traffic
+                        // lights are a static size, and don't scale with the rest of the UI.
+                        return this.pl(px(80.));
+                    }
                 }
 
-                if cfg!(macos) {
-                    // Use pixels here instead of a rem-based size because the macOS traffic
-                    // lights are a static size, and don't scale with the rest of the UI.
-                    this.pl(px(80.))
-                } else {
-                    this
-                }
+                this
             })
             .content_stretch()
             .child(
                 div()
+                    .map(|mut this| {
+                        this.style().clone_from(&self.style);
+                        this
+                    })
                     .flex()
                     .flex_row()
                     .w_full()

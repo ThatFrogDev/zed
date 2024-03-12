@@ -136,7 +136,7 @@ impl PlatformWindow for TestWindow {
     }
 
     fn titlebar_height(&self) -> Pixels {
-        unimplemented!()
+        32.0.into()
     }
 
     fn appearance(&self) -> WindowAppearance {

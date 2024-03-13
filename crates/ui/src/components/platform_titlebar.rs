@@ -168,7 +168,7 @@ impl RenderOnce for PlatformTitlebar {
                     .children(self.children),
             )
             .map(|this| {
-                if cfg!(target_os = "windows") {
+                if cfg!(windows) {
                     this.child(PlatformTitlebar::render_windows_caption_buttons(cx))
                 } else {
                     this

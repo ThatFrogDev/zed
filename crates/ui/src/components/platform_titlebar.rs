@@ -184,8 +184,6 @@ impl InteractiveElement for PlatformTitlebar {
 }
 impl StatefulInteractiveElement for PlatformTitlebar {}
 
-// impl Clickable for PlatformTitlebar {}
-
 impl ParentElement for PlatformTitlebar {
     fn extend(&mut self, elements: impl Iterator<Item = AnyElement>) {
         self.children.extend(elements)

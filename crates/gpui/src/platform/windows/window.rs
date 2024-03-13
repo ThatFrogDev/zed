@@ -803,7 +803,7 @@ impl WindowsWindowInner {
 
         match wparam.0 as u32 {
             // Since these are handled in handle_nc_mouse_up_msg we must prevent the default window proc
-            HTMINBUTTON | HTMAXBUTTON => LRESULT(0),
+            HTMINBUTTON | HTMAXBUTTON | HTCLOSE => LRESULT(0),
             _ => unsafe { DefWindowProcW(self.hwnd, msg, wparam, lparam) },
         }
     }
@@ -848,6 +848,11 @@ impl WindowsWindowInner {
                     } else {
                         ShowWindowAsync(self.hwnd, SW_MAXIMIZE);
                     }
+                    return LRESULT(0);
+                },
+                HTCLOSE => unsafe {
+                    PostMessageW(self.hwnd, WM_CLOSE, WPARAM::default(), LPARAM::default())
+                        .log_err();
                     return LRESULT(0);
                 },
                 _ => {}

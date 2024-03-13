@@ -28,9 +28,8 @@ impl Styled for PlatformTitlebar {
 }
 
 impl PlatformTitlebar {
-    #[cfg(windows)]
-    fn windows_titlebar_top_padding(cx: &WindowContext) -> Pixels {
-        if cx.is_maximized() {
+    fn titlebar_top_padding(cx: &WindowContext) -> Pixels {
+        if cfg!(windows) && cx.is_maximized() {
             // todo(windows): get padding from win32 api, need HWND from window context somehow
             // should be GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) * 2
             px(8.0)
@@ -48,7 +47,7 @@ impl PlatformTitlebar {
 
     #[cfg(windows)]
     fn render_windows_caption_buttons(cx: &mut WindowContext) -> impl Element {
-        let btn_height = cx.titlebar_height() - PlatformTitlebar::windows_titlebar_top_padding(cx);
+        let btn_height = cx.titlebar_height() - PlatformTitlebar::titlebar_top_padding(cx);
         let close_btn_hover_color = Rgba {
             r: 232.0 / 255.0,
             g: 17.0 / 255.0,
@@ -144,9 +143,7 @@ impl RenderOnce for PlatformTitlebar {
         h_flex()
             .id("titlebar")
             .w_full()
-            .when(cfg!(windows), |this| {
-                this.pt(PlatformTitlebar::windows_titlebar_top_padding(cx))
-            })
+            .pt(PlatformTitlebar::titlebar_top_padding(cx))
             .max_h(titlebar_height)
             .min_h(titlebar_height)
             .map(|mut this| {

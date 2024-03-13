@@ -61,7 +61,7 @@ impl HitboxId {
 
 /// A rectangular region that potentially blocks hitboxes inserted prior.
 /// See [ElementContext::insert_hitbox] for more details.
-#[derive(Clone, Debug, Eq, PartialEq, Deref)]
+#[derive(Clone, Debug, Deref)]
 pub struct Hitbox {
     /// A unique identifier for the hitbox
     pub id: HitboxId,
@@ -381,8 +381,7 @@ impl<'a> ElementContext<'a> {
 
         let mut sorted_deferred_draws =
             (0..self.window.next_frame.deferred_draws.len()).collect::<SmallVec<[_; 8]>>();
-        sorted_deferred_draws
-            .sort_unstable_by_key(|ix| self.window.next_frame.deferred_draws[*ix].priority);
+        sorted_deferred_draws.sort_by_key(|ix| self.window.next_frame.deferred_draws[*ix].priority);
         self.layout_deferred_draws(&sorted_deferred_draws);
 
         self.window.mouse_hit_test = self.window.next_frame.hit_test(self.window.mouse_position);

@@ -21,9 +21,7 @@ use util::ResultExt;
 use windows::{
     core::{implement, w, HSTRING, PCWSTR},
     Win32::{
-        Foundation::{
-            FALSE, HINSTANCE, HWND, LPARAM, LRESULT, MAX_PATH, POINT, POINTL, RECT, S_OK, WPARAM,
-        },
+        Foundation::{FALSE, HINSTANCE, HWND, LPARAM, LRESULT, POINT, POINTL, RECT, S_OK, WPARAM},
         Graphics::Gdi::{BeginPaint, EndPaint, InvalidateRect, ScreenToClient, HDC, PAINTSTRUCT},
         System::{
             Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL},
@@ -58,8 +56,8 @@ use crate::{
     DispatchEventResult, GlobalPixels, HiLoWord, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, NavigationDirection, Pixels,
     PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    PromptLevel, Scene, ScrollDelta, Size, TouchPhase, WindowAppearance, WindowBounds,
-    WindowOptions, WindowsDisplay, WindowsPlatformInner,
+    PromptLevel, Scene, ScrollDelta, Size, TouchPhase, WindowAppearance, WindowParams,
+    WindowsDisplay, WindowsPlatformInner,
 };
 
 #[derive(PartialEq)]
@@ -805,7 +803,7 @@ impl WindowsWindowInner {
 
         match wparam.0 as u32 {
             // Since these are handled in handle_nc_mouse_up_msg we must prevent the default window proc
-            HTMINBUTTON | HTMAXBUTTON => LRESULT(0),
+            HTMINBUTTON | HTMAXBUTTON | HTCLOSE => LRESULT(0),
             _ => unsafe { DefWindowProcW(self.hwnd, msg, wparam, lparam) },
         }
     }
@@ -852,6 +850,11 @@ impl WindowsWindowInner {
                     }
                     return LRESULT(0);
                 },
+                HTCLOSE => unsafe {
+                    PostMessageW(self.hwnd, WM_CLOSE, WPARAM::default(), LPARAM::default())
+                        .log_err();
+                    return LRESULT(0);
+                },
                 _ => {}
             };
         }
@@ -888,7 +891,7 @@ impl WindowsWindow {
     pub(crate) fn new(
         platform_inner: Rc<WindowsPlatformInner>,
         handle: AnyWindowHandle,
-        options: WindowOptions,
+        options: WindowParams,
     ) -> Self {
         let classname = register_wnd_class();
         let windowname = HSTRING::from(
@@ -900,20 +903,10 @@ impl WindowsWindow {
                 .unwrap_or(""),
         );
         let dwstyle = WS_THICKFRAME | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX;
-        let mut x = CW_USEDEFAULT;
-        let mut y = CW_USEDEFAULT;
-        let mut nwidth = CW_USEDEFAULT;
-        let mut nheight = CW_USEDEFAULT;
-        match options.bounds {
-            WindowBounds::Fullscreen => {}
-            WindowBounds::Maximized => {}
-            WindowBounds::Fixed(bounds) => {
-                x = bounds.origin.x.0 as i32;
-                y = bounds.origin.y.0 as i32;
-                nwidth = bounds.size.width.0 as i32;
-                nheight = bounds.size.height.0 as i32;
-            }
-        };
+        let x = options.bounds.origin.x.0 as i32;
+        let y = options.bounds.origin.y.0 as i32;
+        let nwidth = options.bounds.size.width.0 as i32;
+        let nheight = options.bounds.size.height.0 as i32;
         let hwndparent = HWND::default();
         let hmenu = HMENU::default();
         let hinstance = HINSTANCE::default();
@@ -957,11 +950,7 @@ impl WindowsWindow {
             .window_handle_values
             .borrow_mut()
             .insert(wnd.inner.hwnd.0);
-        match options.bounds {
-            WindowBounds::Fullscreen => wnd.toggle_full_screen(),
-            WindowBounds::Maximized => wnd.maximize(),
-            WindowBounds::Fixed(_) => {}
-        }
+
         unsafe { ShowWindow(wnd.inner.hwnd, SW_SHOW) };
         wnd
     }
@@ -1001,11 +990,15 @@ impl Drop for WindowsWindow {
 }
 
 impl PlatformWindow for WindowsWindow {
-    fn bounds(&self) -> WindowBounds {
-        WindowBounds::Fixed(Bounds {
+    fn bounds(&self) -> Bounds<GlobalPixels> {
+        Bounds {
             origin: self.inner.origin.get(),
             size: self.inner.size.get(),
-        })
+        }
+    }
+
+    fn is_maximized(&self) -> bool {
+        self.inner.is_maximized()
     }
 
     // todo(windows)
@@ -1020,15 +1013,6 @@ impl PlatformWindow for WindowsWindow {
     // todo(windows)
     fn scale_factor(&self) -> f32 {
         self.inner.scale_factor
-    }
-
-    fn titlebar_top_padding(&self) -> Pixels {
-        if self.inner.is_maximized() {
-            let dpi = unsafe { GetDpiForWindow(self.inner.hwnd) };
-            unsafe { (GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) * 2) as f32 }.into()
-        } else {
-            0.0.into()
-        }
     }
 
     fn titlebar_height(&self) -> Pixels {
@@ -1173,6 +1157,11 @@ impl PlatformWindow for WindowsWindow {
     fn toggle_full_screen(&self) {}
 
     // todo(windows)
+    fn is_full_screen(&self) -> bool {
+        false
+    }
+
+    // todo(windows)
     fn on_request_frame(&self, callback: Box<dyn FnMut()>) {
         self.inner.callbacks.borrow_mut().request_frame = Some(callback);
     }
@@ -1269,9 +1258,9 @@ impl IDropTarget_Impl for WindowsDragDropHandler {
                 let hdrop = idata.u.hGlobal.0 as *mut HDROP;
                 let file_count = DragQueryFileW(*hdrop, DRAGDROP_GET_FILES_COUNT, None);
                 for file_index in 0..file_count {
-                    let mut buffer = [0u16; MAX_PATH as _];
                     let filename_length = DragQueryFileW(*hdrop, file_index, None) as usize;
-                    let ret = DragQueryFileW(*hdrop, file_index, Some(&mut buffer));
+                    let mut buffer = vec![0u16; filename_length + 1];
+                    let ret = DragQueryFileW(*hdrop, file_index, Some(buffer.as_mut_slice()));
                     if ret == 0 {
                         log::error!("unable to read file name");
                         continue;

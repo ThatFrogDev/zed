@@ -1,7 +1,7 @@
 use crate::{
-    px, AnyWindowHandle, AtlasKey, AtlasTextureId, AtlasTile, Bounds, DispatchEventResult, Pixels,
-    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    Size, TestPlatform, TileId, WindowAppearance, WindowBounds, WindowOptions,
+    AnyWindowHandle, AtlasKey, AtlasTextureId, AtlasTile, Bounds, DispatchEventResult,
+    GlobalPixels, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler,
+    PlatformWindow, Point, Size, TestPlatform, TileId, WindowAppearance, WindowParams,
 };
 use collections::HashMap;
 use parking_lot::Mutex;
@@ -12,7 +12,7 @@ use std::{
 };
 
 pub(crate) struct TestWindowState {
-    pub(crate) bounds: WindowBounds,
+    pub(crate) bounds: Bounds<GlobalPixels>,
     pub(crate) handle: AnyWindowHandle,
     display: Rc<dyn PlatformDisplay>,
     pub(crate) title: Option<String>,
@@ -25,6 +25,7 @@ pub(crate) struct TestWindowState {
     resize_callback: Option<Box<dyn FnMut(Size<Pixels>, f32)>>,
     moved_callback: Option<Box<dyn FnMut()>>,
     input_handler: Option<PlatformInputHandler>,
+    is_fullscreen: bool,
 }
 
 #[derive(Clone)]
@@ -48,13 +49,13 @@ impl HasDisplayHandle for TestWindow {
 
 impl TestWindow {
     pub fn new(
-        options: WindowOptions,
         handle: AnyWindowHandle,
+        params: WindowParams,
         platform: Weak<TestPlatform>,
         display: Rc<dyn PlatformDisplay>,
     ) -> Self {
         Self(Arc::new(Mutex::new(TestWindowState {
-            bounds: options.bounds,
+            bounds: params.bounds,
             display,
             platform,
             handle,
@@ -67,6 +68,7 @@ impl TestWindow {
             resize_callback: None,
             moved_callback: None,
             input_handler: None,
+            is_fullscreen: false,
         })))
     }
 
@@ -76,17 +78,7 @@ impl TestWindow {
         let Some(mut callback) = lock.resize_callback.take() else {
             return;
         };
-        match &mut lock.bounds {
-            WindowBounds::Fullscreen | WindowBounds::Maximized => {
-                lock.bounds = WindowBounds::Fixed(Bounds {
-                    origin: Point::default(),
-                    size: size.map(|pixels| f64::from(pixels).into()),
-                });
-            }
-            WindowBounds::Fixed(bounds) => {
-                bounds.size = size.map(|pixels| f64::from(pixels).into());
-            }
-        }
+        lock.bounds.size = size.map(|pixels| f64::from(pixels).into());
         drop(lock);
         callback(size, scale_factor);
         self.0.lock().resize_callback = Some(callback);
@@ -115,16 +107,16 @@ impl TestWindow {
 }
 
 impl PlatformWindow for TestWindow {
-    fn bounds(&self) -> WindowBounds {
+    fn bounds(&self) -> Bounds<GlobalPixels> {
         self.0.lock().bounds
     }
 
+    fn is_maximized(&self) -> bool {
+        unimplemented!()
+    }
+
     fn content_size(&self) -> Size<Pixels> {
-        let bounds = match self.bounds() {
-            WindowBounds::Fixed(bounds) => bounds,
-            WindowBounds::Maximized | WindowBounds::Fullscreen => self.display().bounds(),
-        };
-        bounds.size.map(|p| px(p.0))
+        self.bounds().size.into()
     }
 
     fn scale_factor(&self) -> f32 {
@@ -137,10 +129,6 @@ impl PlatformWindow for TestWindow {
 
     fn titlebar_height(&self) -> Pixels {
         32.0.into()
-    }
-
-    fn titlebar_top_padding(&self) -> Pixels {
-        unimplemented!()
     }
 
     fn appearance(&self) -> WindowAppearance {
@@ -218,7 +206,12 @@ impl PlatformWindow for TestWindow {
     }
 
     fn toggle_full_screen(&self) {
-        unimplemented!()
+        let mut lock = self.0.lock();
+        lock.is_fullscreen = !lock.is_fullscreen;
+    }
+
+    fn is_full_screen(&self) -> bool {
+        self.0.lock().is_fullscreen
     }
 
     fn on_request_frame(&self, _callback: Box<dyn FnMut()>) {}

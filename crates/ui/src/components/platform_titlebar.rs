@@ -1,32 +1,53 @@
+// allowing due to multiple platform conditional code
+#![allow(unused_imports)]
+
 use gpui::{
     div,
     prelude::FluentBuilder,
-    px, AnyElement, Div, Element, Fill, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    Rgba, StyleRefinement, Styled,
+    px, AnyElement, Div, Element, ElementId, Fill, InteractiveElement, Interactivity, IntoElement,
+    ParentElement, Pixels, RenderOnce, Rgba, Stateful, StatefulInteractiveElement, StyleRefinement,
+    Styled,
     WindowAppearance::{Dark, Light, VibrantDark, VibrantLight},
-    WindowBounds, WindowContext,
+    WindowContext,
 };
 use smallvec::SmallVec;
-use std::ops::Not;
 
 use crate::h_flex;
 
 #[derive(IntoElement)]
 pub struct PlatformTitlebar {
     titlebar_bg: Option<Fill>,
+    content: Stateful<Div>,
     children: SmallVec<[AnyElement; 2]>,
-    style: StyleRefinement,
 }
 
 impl Styled for PlatformTitlebar {
     fn style(&mut self) -> &mut StyleRefinement {
-        &mut self.style
+        self.content.style()
     }
 }
 
 impl PlatformTitlebar {
-    fn render_caption_buttons(cx: &mut WindowContext) -> impl Element {
-        let btn_height = cx.titlebar_height() - cx.titlebar_top_padding();
+    fn titlebar_top_padding(cx: &WindowContext) -> Pixels {
+        if cfg!(windows) && cx.is_maximized() {
+            // todo(windows): get padding from win32 api, need HWND from window context somehow
+            // should be GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) * 2
+            px(8.0)
+        } else {
+            px(0.0)
+        }
+    }
+
+    #[cfg(windows)]
+    fn windows_caption_button_width(_cx: &WindowContext) -> Pixels {
+        // todo(windows): get padding from win32 api, need HWND from window context somehow
+        // should be GetSystemMetricsForDpi(SM_CXSIZE, dpi)
+        px(36.0)
+    }
+
+    #[cfg(windows)]
+    fn render_windows_caption_buttons(cx: &mut WindowContext) -> impl Element {
+        let btn_height = cx.titlebar_height() - PlatformTitlebar::titlebar_top_padding(cx);
         let close_btn_hover_color = Rgba {
             r: 232.0 / 255.0,
             g: 17.0 / 255.0,
@@ -49,17 +70,23 @@ impl PlatformTitlebar {
             },
         };
 
-        fn windows_caption_btn(icon_text: &'static str, hover_color: Rgba) -> Div {
-            // let mut active_color = hover_color.clone();
-            // active_color.a *= 0.2;
+        fn windows_caption_btn(
+            id: &'static str,
+            icon_text: &'static str,
+            hover_color: Rgba,
+            cx: &WindowContext,
+        ) -> Stateful<Div> {
+            let mut active_color = hover_color.clone();
+            active_color.a *= 0.2;
             h_flex()
+                .id(id)
                 .h_full()
                 .justify_center()
                 .content_center()
                 .items_center()
-                .w(px(36.)) // TODO: get size of controls from window
+                .w(PlatformTitlebar::windows_caption_button_width(cx))
                 .hover(|style| style.bg(hover_color))
-                // .active(|style| style.bg(active_color))
+                .active(|style| style.bg(active_color))
                 .child(icon_text)
         }
 
@@ -74,16 +101,18 @@ impl PlatformTitlebar {
             .font("Segoe Fluent Icons")
             .text_size(gpui::Pixels(10.0))
             .children(vec![
-                windows_caption_btn("\u{e921}", btn_hover_color), // minimize icon
+                windows_caption_btn("minimize", "\u{e921}", btn_hover_color, cx), // minimize icon
                 windows_caption_btn(
-                    if matches!(cx.window_bounds(), WindowBounds::Maximized) {
+                    "maximize",
+                    if cx.is_maximized() {
                         "\u{e923}" // restore icon
                     } else {
                         "\u{e922}" // maximize icon
                     },
                     btn_hover_color,
+                    cx,
                 ),
-                windows_caption_btn("\u{e8bb}", close_btn_hover_color), // close icon
+                windows_caption_btn("close", "\u{e8bb}", close_btn_hover_color, cx), // close icon
             ])
     }
 
@@ -99,26 +128,28 @@ impl PlatformTitlebar {
 }
 
 /// .
-pub fn platform_titlebar() -> PlatformTitlebar {
+pub fn platform_titlebar(id: impl Into<ElementId>) -> PlatformTitlebar {
+    let id = id.into();
     PlatformTitlebar {
         titlebar_bg: None,
+        content: div().id(id.clone()),
         children: SmallVec::new(),
-        style: StyleRefinement::default(),
     }
 }
 
 impl RenderOnce for PlatformTitlebar {
     fn render(self, cx: &mut WindowContext) -> impl IntoElement {
+        let titlebar_height = cx.titlebar_height();
         h_flex()
             .id("titlebar")
             .w_full()
-            .pt(cx.titlebar_top_padding())
-            .max_h(cx.titlebar_height())
-            .min_h(cx.titlebar_height())
+            .pt(PlatformTitlebar::titlebar_top_padding(cx))
+            .max_h(titlebar_height)
+            .min_h(titlebar_height)
             .map(|mut this| {
                 this.style().background = self.titlebar_bg;
                 if cfg!(macos) {
-                    if matches!(cx.window_bounds(), WindowBounds::Fullscreen).not() {
+                    if !cx.is_maximized() {
                         // Use pixels here instead of a rem-based size because the macOS traffic
                         // lights are a static size, and don't scale with the rest of the UI.
                         return this.pl(px(80.));
@@ -129,11 +160,7 @@ impl RenderOnce for PlatformTitlebar {
             })
             .content_stretch()
             .child(
-                div()
-                    .map(|mut this| {
-                        this.style().clone_from(&self.style);
-                        this
-                    })
+                self.content
                     .flex()
                     .flex_row()
                     .w_full()
@@ -141,14 +168,21 @@ impl RenderOnce for PlatformTitlebar {
                     .children(self.children),
             )
             .map(|this| {
-                if cfg!(target_os = "windows") {
-                    this.child(PlatformTitlebar::render_caption_buttons(cx))
+                if cfg!(windows) {
+                    this.child(PlatformTitlebar::render_windows_caption_buttons(cx))
                 } else {
                     this
                 }
             })
     }
 }
+
+impl InteractiveElement for PlatformTitlebar {
+    fn interactivity(&mut self) -> &mut Interactivity {
+        self.content.interactivity()
+    }
+}
+impl StatefulInteractiveElement for PlatformTitlebar {}
 
 impl ParentElement for PlatformTitlebar {
     fn extend(&mut self, elements: impl Iterator<Item = AnyElement>) {

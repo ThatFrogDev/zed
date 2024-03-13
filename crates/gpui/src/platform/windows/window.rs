@@ -21,9 +21,7 @@ use util::ResultExt;
 use windows::{
     core::{implement, w, HSTRING, PCWSTR},
     Win32::{
-        Foundation::{
-            FALSE, HINSTANCE, HWND, LPARAM, LRESULT, MAX_PATH, POINT, POINTL, RECT, S_OK, WPARAM,
-        },
+        Foundation::{FALSE, HINSTANCE, HWND, LPARAM, LRESULT, POINT, POINTL, RECT, S_OK, WPARAM},
         Graphics::Gdi::{BeginPaint, EndPaint, InvalidateRect, ScreenToClient, HDC, PAINTSTRUCT},
         System::{
             Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL},

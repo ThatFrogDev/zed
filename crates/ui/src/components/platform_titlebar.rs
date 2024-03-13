@@ -1,3 +1,6 @@
+// allowing due to multiple platform conditional code
+#![allow(unused_imports)]
+
 use gpui::{
     div,
     prelude::FluentBuilder,
@@ -137,12 +140,15 @@ pub fn platform_titlebar(id: impl Into<ElementId>) -> PlatformTitlebar {
 
 impl RenderOnce for PlatformTitlebar {
     fn render(self, cx: &mut WindowContext) -> impl IntoElement {
+        let titlebar_height = cx.titlebar_height();
         h_flex()
             .id("titlebar")
             .w_full()
-            .pt(PlatformTitlebar::windows_titlebar_top_padding(cx))
-            .max_h(cx.titlebar_height())
-            .min_h(cx.titlebar_height())
+            .when(cfg!(windows), |this| {
+                this.pt(PlatformTitlebar::windows_titlebar_top_padding(cx))
+            })
+            .max_h(titlebar_height)
+            .min_h(titlebar_height)
             .map(|mut this| {
                 this.style().background = self.titlebar_bg;
                 if cfg!(macos) {

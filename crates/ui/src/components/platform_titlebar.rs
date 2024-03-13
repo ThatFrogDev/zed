@@ -1,8 +1,9 @@
 use gpui::{
     div,
     prelude::FluentBuilder,
-    px, AnyElement, Div, Element, Fill, InteractiveElement, IntoElement, ParentElement, Pixels,
-    RenderOnce, Rgba, Stateful, StatefulInteractiveElement, StyleRefinement, Styled,
+    px, AnyElement, Div, Element, ElementId, Fill, InteractiveElement, Interactivity, IntoElement,
+    ParentElement, Pixels, RenderOnce, Rgba, Stateful, StatefulInteractiveElement, StyleRefinement,
+    Styled,
     WindowAppearance::{Dark, Light, VibrantDark, VibrantLight},
     WindowContext,
 };
@@ -13,17 +14,18 @@ use crate::h_flex;
 #[derive(IntoElement)]
 pub struct PlatformTitlebar {
     titlebar_bg: Option<Fill>,
+    content: Stateful<Div>,
     children: SmallVec<[AnyElement; 2]>,
-    style: StyleRefinement,
 }
 
 impl Styled for PlatformTitlebar {
     fn style(&mut self) -> &mut StyleRefinement {
-        &mut self.style
+        self.content.style()
     }
 }
 
 impl PlatformTitlebar {
+    #[cfg(windows)]
     fn windows_titlebar_top_padding(cx: &WindowContext) -> Pixels {
         if cx.is_maximized() {
             // todo(windows): get padding from win32 api, need HWND from window context somehow
@@ -34,13 +36,15 @@ impl PlatformTitlebar {
         }
     }
 
+    #[cfg(windows)]
     fn windows_caption_button_width(_cx: &WindowContext) -> Pixels {
         // todo(windows): get padding from win32 api, need HWND from window context somehow
         // should be GetSystemMetricsForDpi(SM_CXSIZE, dpi)
         px(36.0)
     }
 
-    fn render_caption_buttons(cx: &mut WindowContext) -> impl Element {
+    #[cfg(windows)]
+    fn render_windows_caption_buttons(cx: &mut WindowContext) -> impl Element {
         let btn_height = cx.titlebar_height() - PlatformTitlebar::windows_titlebar_top_padding(cx);
         let close_btn_hover_color = Rgba {
             r: 232.0 / 255.0,
@@ -78,7 +82,7 @@ impl PlatformTitlebar {
                 .justify_center()
                 .content_center()
                 .items_center()
-                .w(PlatformTitlebar::windows_caption_button_width(cx)) // TODO: get size of controls from window
+                .w(PlatformTitlebar::windows_caption_button_width(cx))
                 .hover(|style| style.bg(hover_color))
                 .active(|style| style.bg(active_color))
                 .child(icon_text)
@@ -122,11 +126,12 @@ impl PlatformTitlebar {
 }
 
 /// .
-pub fn platform_titlebar() -> PlatformTitlebar {
+pub fn platform_titlebar(id: impl Into<ElementId>) -> PlatformTitlebar {
+    let id = id.into();
     PlatformTitlebar {
         titlebar_bg: None,
+        content: div().id(id.clone()),
         children: SmallVec::new(),
-        style: StyleRefinement::default(),
     }
 }
 
@@ -152,11 +157,7 @@ impl RenderOnce for PlatformTitlebar {
             })
             .content_stretch()
             .child(
-                div()
-                    .map(|mut this| {
-                        this.style().clone_from(&self.style);
-                        this
-                    })
+                self.content
                     .flex()
                     .flex_row()
                     .w_full()
@@ -165,13 +166,22 @@ impl RenderOnce for PlatformTitlebar {
             )
             .map(|this| {
                 if cfg!(target_os = "windows") {
-                    this.child(PlatformTitlebar::render_caption_buttons(cx))
+                    this.child(PlatformTitlebar::render_windows_caption_buttons(cx))
                 } else {
                     this
                 }
             })
     }
 }
+
+impl InteractiveElement for PlatformTitlebar {
+    fn interactivity(&mut self) -> &mut Interactivity {
+        self.content.interactivity()
+    }
+}
+impl StatefulInteractiveElement for PlatformTitlebar {}
+
+// impl Clickable for PlatformTitlebar {}
 
 impl ParentElement for PlatformTitlebar {
     fn extend(&mut self, elements: impl Iterator<Item = AnyElement>) {

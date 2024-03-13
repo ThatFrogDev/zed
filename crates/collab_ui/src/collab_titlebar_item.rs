@@ -58,16 +58,16 @@ impl Render for CollabTitlebarItem {
         let project_id = self.project.read(cx).remote_id();
         let workspace = self.workspace.upgrade();
 
-        platform_titlebar()
+        platform_titlebar("collab-titlebar")
             .titlebar_bg(cx.theme().colors().title_bar_background)
-            // TODO: actions such as double clicking to zoom window are already handled by the Windows platform
-            //       can this be done on the other platforms the same way or should this be here?
-            // .id("titlebar")
-            // .on_click(|event, cx| {
-            //     if event.up.click_count == 2 {
-            //         cx.zoom_window();
-            //     }
-            // })
+            // note: on windows titlebar behaviour is handled by the platform implementation
+            .when(cfg!(not(windows)), |this| {
+                this.on_click(|event, cx| {
+                    if event.up.click_count == 2 {
+                        cx.zoom_window();
+                    }
+                })
+            })
             .px_2()
             .justify_between()
             // left side
